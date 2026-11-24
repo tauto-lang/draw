@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>src/render.taut</title><style>:root{color-scheme:light dark;--bg:#fff;--fg:#1f2328;--mut:#6e7781;--kw:#cf222e;--str:#0a3069;--num:#0550ae;--com:#6e7781;--mac:#8250df;--ty:#953800;--fn:#6639ba;--var:#116329;--op:#0550ae;--link:#0969da;--sel:#fff8c5}@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#7d8590;--kw:#ff7b72;--str:#a5d6ff;--num:#79c0ff;--com:#8b949e;--mac:#d2a8ff;--ty:#ffa657;--fn:#d2a8ff;--var:#7ee787;--op:#79c0ff;--link:#58a6ff;--sel:#3a3000}}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}nav,main{padding:8px 16px}a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}pre{margin:0;padding:8px 0;font:13px/1.5 ui-monospace,monospace;overflow-x:auto}pre a{color:inherit}pre a[href^="#"],pre a[href*=".html"]{text-decoration:underline dotted}.ln{display:inline-block;width:5ch;margin-right:2ch;text-align:right;color:var(--mut);user-select:none;text-decoration:none!important}.ln:target{background:var(--sel)}.kw{color:var(--kw)}.str{color:var(--str)}.num{color:var(--num)}.com{color:var(--com)}.mac{color:var(--mac)}.ty{color:var(--ty)}.fn{color:var(--fn)}.var{color:var(--var)}.op{color:var(--op)}ul{list-style:none;padding-left:0}li li{padding-left:2ch}.kind{color:var(--mut)}</style>
+<nav><a href="../index.html">index</a> / src/render.taut</nav>
+<pre><code><a class="ln" id="L1" href="#L1">1</a><span class="kw">pub</span> <span class="kw">struct</span>(<span class="kw">affine</span>) <span class="ty">Device</span> {}
+<a class="ln" id="L2" href="#L2">2</a><span class="kw">pub</span> <span class="kw">struct</span> <span class="ty">Buffer</span> { id: u64 }
+<a class="ln" id="L3" href="#L3">3</a><span class="kw">pub</span> <span class="kw">struct</span> <span class="ty">Texture</span> { id: u64 }
+<a class="ln" id="L4" href="#L4">4</a><span class="kw">pub</span> <span class="kw">struct</span> <span class="ty">Target</span> { id: u64 }
+<a class="ln" id="L5" href="#L5">5</a><span class="kw">pub</span> <span class="kw">struct</span> <span class="ty">Pipeline</span> { id: u64 }
+<a class="ln" id="L6" href="#L6">6</a><span class="kw">pub(open)</span> <span class="kw">enum</span> <span class="ty">BufferKind</span> { <span class="ty">Storage</span>, <span class="ty">Uniform</span> }
+<a class="ln" id="L7" href="#L7">7</a><span class="kw">pub(open)</span> <span class="kw">enum</span> <span class="ty">FrameStatus</span> { <span class="ty">Submitted</span>, <span class="ty">Outdated</span>, <span class="ty">Lost</span>, <span class="ty">TimedOut</span> }
+<a class="ln" id="L8" href="#L8">8</a><span class="kw">pub(open)</span> <span class="kw">enum</span> <span class="ty">Blend</span> { <span class="ty">Replace</span>, <span class="ty">SourceOver</span> }
+<a class="ln" id="L9" href="#L9">9</a><span class="kw">pub(open)</span> <span class="kw">enum</span> <span class="ty">Binding</span> { <span class="ty">BindBuffer</span>(<a href="#L2"><span class="ty">Buffer</span></a>), <span class="ty">BindTexture</span>(<a href="#L3"><span class="ty">Texture</span></a>) }
+<a class="ln" id="L10" href="#L10">10</a><span class="kw">pub(open)</span> <span class="kw">struct</span> <span class="ty">Pass</span> {
+<a class="ln" id="L11" href="#L11">11</a>  target: <a href="#L4"><span class="ty">Target</span></a>,
+<a class="ln" id="L12" href="#L12">12</a>  pipeline: <a href="#L5"><span class="ty">Pipeline</span></a>,
+<a class="ln" id="L13" href="#L13">13</a>  bindings: <span class="ty">List</span>(<a href="#L9"><span class="ty">Binding</span></a>),
+<a class="ln" id="L14" href="#L14">14</a>  clear_rgba: <span class="ty">Option</span>(u32),
+<a class="ln" id="L15" href="#L15">15</a>  vertices: u32,
+<a class="ln" id="L16" href="#L16">16</a>  instances: u32
+<a class="ln" id="L17" href="#L17">17</a>}
+<a class="ln" id="L18" href="#L18">18</a>
+<a class="ln" id="L19" href="#L19">19</a><span class="kw">extern</span> {
+<a class="ln" id="L20" href="#L20">20</a>  <span class="kw">fn</span> <span class="fn">open</span>(): <span class="ty">Result</span>(<a href="#L1"><span class="ty">Device</span></a>, <span class="ty">Text</span>)
+<a class="ln" id="L21" href="#L21">21</a>  <span class="kw">fn</span> <span class="fn">make_buffer</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">bytes</span>: u64, <span class="var">uniform</span>: <span class="ty">Bool</span>): <span class="ty">Result</span>(u64, <span class="ty">Text</span>)
+<a class="ln" id="L22" href="#L22">22</a>  <span class="kw">fn</span> <span class="fn">upload_buffer</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">id</span>: u64, <span class="var">offset</span>: u64, <span class="var">data</span>: &amp;<span class="ty">Vec</span>(u8)): <span class="ty">Result</span>((), <span class="ty">Text</span>)
+<a class="ln" id="L23" href="#L23">23</a>  <span class="kw">fn</span> <span class="fn">make_texture</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">width</span>: u32, <span class="var">height</span>: u32, <span class="var">mask</span>: <span class="ty">Bool</span>): <span class="ty">Result</span>(u64, <span class="ty">Text</span>)
+<a class="ln" id="L24" href="#L24">24</a>  <span class="kw">fn</span> <span class="fn">upload_texture</span>(
+<a class="ln" id="L25" href="#L25">25</a>    <span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>,
+<a class="ln" id="L26" href="#L26">26</a>    <span class="var">id</span>: u64,
+<a class="ln" id="L27" href="#L27">27</a>    <span class="var">x</span>: u32,
+<a class="ln" id="L28" href="#L28">28</a>    <span class="var">y</span>: u32,
+<a class="ln" id="L29" href="#L29">29</a>    <span class="var">width</span>: u32,
+<a class="ln" id="L30" href="#L30">30</a>    <span class="var">height</span>: u32,
+<a class="ln" id="L31" href="#L31">31</a>    <span class="var">data</span>: &amp;<span class="ty">Vec</span>(u8)
+<a class="ln" id="L32" href="#L32">32</a>  ): <span class="ty">Result</span>((), <span class="ty">Text</span>)
+<a class="ln" id="L33" href="#L33">33</a>  <span class="kw">fn</span> <span class="fn">make_pipeline</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">target</span>: u64, <span class="var">source</span>: &amp;<span class="ty">Text</span>, <span class="var">blend</span>: <span class="ty">Bool</span>): <span class="ty">Result</span>(u64, <span class="ty">Text</span>)
+<a class="ln" id="L34" href="#L34">34</a>  <span class="kw">fn</span> <span class="fn">draw</span>(
+<a class="ln" id="L35" href="#L35">35</a>    <span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>,
+<a class="ln" id="L36" href="#L36">36</a>    <span class="var">target</span>: u64,
+<a class="ln" id="L37" href="#L37">37</a>    <span class="var">pipe</span>: u64,
+<a class="ln" id="L38" href="#L38">38</a>    <span class="var">ids</span>: &amp;<span class="ty">Vec</span>(u64),
+<a class="ln" id="L39" href="#L39">39</a>    <span class="var">clear</span>: <span class="ty">Option</span>(u32),
+<a class="ln" id="L40" href="#L40">40</a>    <span class="var">vertices</span>: u32,
+<a class="ln" id="L41" href="#L41">41</a>    <span class="var">instances</span>: u32
+<a class="ln" id="L42" href="#L42">42</a>  ): <span class="ty">Result</span>(u32, <span class="ty">Text</span>)
+<a class="ln" id="L43" href="#L43">43</a>  <span class="kw">fn</span> <span class="fn">read_rgba</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">id</span>: u64, <span class="var">out</span>: &amp;<span class="kw">mut</span> <span class="ty">Vec</span>(u8)): <span class="ty">Result</span>((), <span class="ty">Text</span>)
+<a class="ln" id="L44" href="#L44">44</a>  <span class="kw">fn</span> <span class="fn">window_target</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>): <span class="ty">Result</span>(u64, <span class="ty">Text</span>)
+<a class="ln" id="L45" href="#L45">45</a>  <span class="kw">fn</span> <span class="fn">resize</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">id</span>: u64, <span class="var">width</span>: u32, <span class="var">height</span>: u32): <span class="ty">Result</span>((), <span class="ty">Text</span>)
+<a class="ln" id="L46" href="#L46">46</a>  <span class="kw">fn</span> <span class="fn">release</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">id</span>: u64): <span class="ty">Result</span>((), <span class="ty">Text</span>)
+<a class="ln" id="L47" href="#L47">47</a>}
+<a class="ln" id="L48" href="#L48">48</a>
+<a class="ln" id="L49" href="#L49">49</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Device</span> {
+<a class="ln" id="L50" href="#L50">50</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">headless</span>(): <span class="ty">Result</span>(<a href="#L1"><span class="ty">Device</span></a>, <span class="ty">Text</span>) { <a href="#L20"><span class="fn">open</span></a>() }
+<a class="ln" id="L51" href="#L51">51</a>}
+<a class="ln" id="L52" href="#L52">52</a>
+<a class="ln" id="L53" href="#L53">53</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Buffer</span> {
+<a class="ln" id="L54" href="#L54">54</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">create</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">bytes</span>: u64, <span class="var">kind</span>: <a href="#L6"><span class="ty">BufferKind</span></a>): <span class="ty">Result</span>(<a href="#L2"><span class="ty">Buffer</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L55" href="#L55">55</a>    <span class="kw">match</span> <a href="#L21"><span class="fn">make_buffer</span></a>(&amp;<span class="kw">mut</span> d, bytes, <span class="kw">match</span> kind { <span class="ty">Storage</span> =&gt; <span class="kw">false</span>, <span class="ty">Uniform</span> =&gt; <span class="kw">true</span> }) {
+<a class="ln" id="L56" href="#L56">56</a>      <span class="ty">Ok</span>(id) =&gt; <span class="ty">Ok</span>(<span class="ty">Buffer</span> { id: id })
+<a class="ln" id="L57" href="#L57">57</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L58" href="#L58">58</a>    }
+<a class="ln" id="L59" href="#L59">59</a>  }
+<a class="ln" id="L60" href="#L60">60</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">write</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">b</span>: <a href="#L2"><span class="ty">Buffer</span></a>, <span class="var">offset</span>: u64, <span class="var">data</span>: &amp;<span class="ty">Vec</span>(u8)): <span class="ty">Result</span>((), <span class="ty">Text</span>) {
+<a class="ln" id="L61" href="#L61">61</a>    <a href="#L22"><span class="fn">upload_buffer</span></a>(&amp;<span class="kw">mut</span> d, b.id, offset, &amp;data)
+<a class="ln" id="L62" href="#L62">62</a>  }
+<a class="ln" id="L63" href="#L63">63</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">close</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">b</span>: <a href="#L2"><span class="ty">Buffer</span></a>): <span class="ty">Result</span>((), <span class="ty">Text</span>) { <a href="#L46"><span class="fn">release</span></a>(&amp;<span class="kw">mut</span> d, b.id) }
+<a class="ln" id="L64" href="#L64">64</a>}
+<a class="ln" id="L65" href="#L65">65</a>
+<a class="ln" id="L66" href="#L66">66</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Texture</span> {
+<a class="ln" id="L67" href="#L67">67</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">mask</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">width</span>: u32, <span class="var">height</span>: u32): <span class="ty">Result</span>(<a href="#L3"><span class="ty">Texture</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L68" href="#L68">68</a>    <span class="kw">match</span> <a href="#L23"><span class="fn">make_texture</span></a>(&amp;<span class="kw">mut</span> d, width, height, <span class="kw">true</span>) {
+<a class="ln" id="L69" href="#L69">69</a>      <span class="ty">Ok</span>(id) =&gt; <span class="ty">Ok</span>(<span class="ty">Texture</span> { id: id })
+<a class="ln" id="L70" href="#L70">70</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L71" href="#L71">71</a>    }
+<a class="ln" id="L72" href="#L72">72</a>  }
+<a class="ln" id="L73" href="#L73">73</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">write</span>(
+<a class="ln" id="L74" href="#L74">74</a>    <span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>,
+<a class="ln" id="L75" href="#L75">75</a>    <span class="var">t</span>: <a href="#L3"><span class="ty">Texture</span></a>,
+<a class="ln" id="L76" href="#L76">76</a>    <span class="var">x</span>: u32,
+<a class="ln" id="L77" href="#L77">77</a>    <span class="var">y</span>: u32,
+<a class="ln" id="L78" href="#L78">78</a>    <span class="var">width</span>: u32,
+<a class="ln" id="L79" href="#L79">79</a>    <span class="var">height</span>: u32,
+<a class="ln" id="L80" href="#L80">80</a>    <span class="var">data</span>: &amp;<span class="ty">Vec</span>(u8)
+<a class="ln" id="L81" href="#L81">81</a>  ): <span class="ty">Result</span>((), <span class="ty">Text</span>) {
+<a class="ln" id="L82" href="#L82">82</a>    <a href="#L24"><span class="fn">upload_texture</span></a>(&amp;<span class="kw">mut</span> d, t.id, x, y, width, height, &amp;data)
+<a class="ln" id="L83" href="#L83">83</a>  }
+<a class="ln" id="L84" href="#L84">84</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">close</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">t</span>: <a href="#L3"><span class="ty">Texture</span></a>): <span class="ty">Result</span>((), <span class="ty">Text</span>) { <a href="#L46"><span class="fn">release</span></a>(&amp;<span class="kw">mut</span> d, t.id) }
+<a class="ln" id="L85" href="#L85">85</a>}
+<a class="ln" id="L86" href="#L86">86</a>
+<a class="ln" id="L87" href="#L87">87</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Target</span> {
+<a class="ln" id="L88" href="#L88">88</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">window</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>): <span class="ty">Result</span>(<a href="#L4"><span class="ty">Target</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L89" href="#L89">89</a>    <span class="kw">match</span> <a href="#L44"><span class="fn">window_target</span></a>(&amp;<span class="kw">mut</span> d) { <span class="ty">Ok</span>(id) =&gt; <span class="ty">Ok</span>(<span class="ty">Target</span> { id: id }), <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e) }
+<a class="ln" id="L90" href="#L90">90</a>  }
+<a class="ln" id="L91" href="#L91">91</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">resize_window</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">t</span>: <a href="#L4"><span class="ty">Target</span></a>, <span class="var">width</span>: u32, <span class="var">height</span>: u32): <span class="ty">Result</span>((), <span class="ty">Text</span>) {
+<a class="ln" id="L92" href="#L92">92</a>    <a href="#L45"><span class="fn">resize</span></a>(&amp;<span class="kw">mut</span> d, t.id, width, height)
+<a class="ln" id="L93" href="#L93">93</a>  }
+<a class="ln" id="L94" href="#L94">94</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">rgba8</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">width</span>: u32, <span class="var">height</span>: u32): <span class="ty">Result</span>(<a href="#L4"><span class="ty">Target</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L95" href="#L95">95</a>    <span class="kw">match</span> <a href="#L23"><span class="fn">make_texture</span></a>(&amp;<span class="kw">mut</span> d, width, height, <span class="kw">false</span>) {
+<a class="ln" id="L96" href="#L96">96</a>      <span class="ty">Ok</span>(id) =&gt; <span class="ty">Ok</span>(<span class="ty">Target</span> { id: id })
+<a class="ln" id="L97" href="#L97">97</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L98" href="#L98">98</a>    }
+<a class="ln" id="L99" href="#L99">99</a>  }
+<a class="ln" id="L100" href="#L100">100</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">texture</span>(<span class="var">t</span>: <a href="#L4"><span class="ty">Target</span></a>): <a href="#L3"><span class="ty">Texture</span></a> { <span class="ty">Texture</span> { id: t.id } }
+<a class="ln" id="L101" href="#L101">101</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">read</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">t</span>: <a href="#L4"><span class="ty">Target</span></a>): <span class="ty">Result</span>(<span class="ty">Vec</span>(u8), <span class="ty">Text</span>) {
+<a class="ln" id="L102" href="#L102">102</a>    <span class="kw">var</span> pixels: <span class="ty">Vec</span>(u8) := <span class="fn">Vec::new</span>()
+<a class="ln" id="L103" href="#L103">103</a>    <span class="kw">match</span> <a href="#L43"><span class="fn">read_rgba</span></a>(&amp;<span class="kw">mut</span> d, t.id, &amp;<span class="kw">mut</span> pixels) { <span class="ty">Ok</span>(_) =&gt; <span class="ty">Ok</span>(pixels), <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e) }
+<a class="ln" id="L104" href="#L104">104</a>  }
+<a class="ln" id="L105" href="#L105">105</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">close</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">t</span>: <a href="#L4"><span class="ty">Target</span></a>): <span class="ty">Result</span>((), <span class="ty">Text</span>) { <a href="#L46"><span class="fn">release</span></a>(&amp;<span class="kw">mut</span> d, t.id) }
+<a class="ln" id="L106" href="#L106">106</a>}
+<a class="ln" id="L107" href="#L107">107</a>
+<a class="ln" id="L108" href="#L108">108</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Pipeline</span> {
+<a class="ln" id="L109" href="#L109">109</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">create</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">target</span>: <a href="#L4"><span class="ty">Target</span></a>, <span class="var">wgsl</span>: <span class="ty">Text</span>, <span class="var">blend</span>: <a href="#L8"><span class="ty">Blend</span></a>): <span class="ty">Result</span>(<a href="#L5"><span class="ty">Pipeline</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L110" href="#L110">110</a>    <span class="kw">match</span> <a href="#L33"><span class="fn">make_pipeline</span></a>(
+<a class="ln" id="L111" href="#L111">111</a>      &amp;<span class="kw">mut</span> d,
+<a class="ln" id="L112" href="#L112">112</a>      target.id,
+<a class="ln" id="L113" href="#L113">113</a>      &amp;wgsl,
+<a class="ln" id="L114" href="#L114">114</a>      <span class="kw">match</span> blend { <span class="ty">Replace</span> =&gt; <span class="kw">false</span>, <span class="ty">SourceOver</span> =&gt; <span class="kw">true</span> }
+<a class="ln" id="L115" href="#L115">115</a>    ) {
+<a class="ln" id="L116" href="#L116">116</a>      <span class="ty">Ok</span>(id) =&gt; <span class="ty">Ok</span>(<span class="ty">Pipeline</span> { id: id })
+<a class="ln" id="L117" href="#L117">117</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L118" href="#L118">118</a>    }
+<a class="ln" id="L119" href="#L119">119</a>  }
+<a class="ln" id="L120" href="#L120">120</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">close</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">p</span>: <a href="#L5"><span class="ty">Pipeline</span></a>): <span class="ty">Result</span>((), <span class="ty">Text</span>) { <a href="#L46"><span class="fn">release</span></a>(&amp;<span class="kw">mut</span> d, p.id) }
+<a class="ln" id="L121" href="#L121">121</a>}
+<a class="ln" id="L122" href="#L122">122</a>
+<a class="ln" id="L123" href="#L123">123</a><span class="kw">fn</span> <span class="fn">collect_bindings</span>(<span class="var">xs</span>: <span class="ty">List</span>(<a href="#L9"><span class="ty">Binding</span></a>), <span class="var">ids</span>: &amp;<span class="kw">mut</span> <span class="ty">Vec</span>(u64)): <span class="ty">Unit</span> {
+<a class="ln" id="L124" href="#L124">124</a>  <span class="kw">match</span> xs {
+<a class="ln" id="L125" href="#L125">125</a>    <span class="ty">Nil</span> =&gt; #()
+<a class="ln" id="L126" href="#L126">126</a>    <span class="ty">Cons</span>(x, tail) =&gt; {
+<a class="ln" id="L127" href="#L127">127</a>      <span class="fn">Vec::push</span>(&amp;<span class="kw">mut</span> ids, <span class="kw">match</span> x { <span class="ty">BindBuffer</span>(b) =&gt; b.id, <span class="ty">BindTexture</span>(t) =&gt; t.id })
+<a class="ln" id="L128" href="#L128">128</a>      <a href="#L123"><span class="fn">collect_bindings</span></a>(tail, &amp;<span class="kw">mut</span> ids)
+<a class="ln" id="L129" href="#L129">129</a>    }
+<a class="ln" id="L130" href="#L130">130</a>  }
+<a class="ln" id="L131" href="#L131">131</a>}
+<a class="ln" id="L132" href="#L132">132</a>
+<a class="ln" id="L133" href="#L133">133</a><span class="kw">pub</span> <span class="kw">module</span> <span class="ty">Pass</span> {
+<a class="ln" id="L134" href="#L134">134</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">submit_frame</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">p</span>: <a href="#L10"><span class="ty">Pass</span></a>): <span class="ty">Result</span>(<a href="#L7"><span class="ty">FrameStatus</span></a>, <span class="ty">Text</span>) {
+<a class="ln" id="L135" href="#L135">135</a>    <span class="kw">var</span> ids: <span class="ty">Vec</span>(u64) := <span class="fn">Vec::new</span>()
+<a class="ln" id="L136" href="#L136">136</a>    <a href="#L123"><span class="fn">collect_bindings</span></a>(p.bindings, &amp;<span class="kw">mut</span> ids)
+<a class="ln" id="L137" href="#L137">137</a>    <span class="kw">match</span> <a href="#L34"><span class="fn">draw</span></a>(&amp;<span class="kw">mut</span> d, p.target.id, p.pipeline.id, &amp;ids, p.clear_rgba, p.vertices, p.instances) {
+<a class="ln" id="L138" href="#L138">138</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L139" href="#L139">139</a>      <span class="ty">Ok</span>(<span class="num">0</span>) =&gt; <span class="ty">Ok</span>(<a href="#L7"><span class="ty">Submitted</span></a>)
+<a class="ln" id="L140" href="#L140">140</a>      <span class="ty">Ok</span>(<span class="num">1</span>) =&gt; <span class="ty">Ok</span>(<a href="#L7"><span class="ty">Outdated</span></a>)
+<a class="ln" id="L141" href="#L141">141</a>      <span class="ty">Ok</span>(<span class="num">2</span>) =&gt; <span class="ty">Ok</span>(<a href="#L7"><span class="ty">Lost</span></a>)
+<a class="ln" id="L142" href="#L142">142</a>      <span class="ty">Ok</span>(<span class="num">3</span>) =&gt; <span class="ty">Ok</span>(<a href="#L7"><span class="ty">TimedOut</span></a>)
+<a class="ln" id="L143" href="#L143">143</a>      <span class="ty">Ok</span>(_) =&gt; <span class="ty">Err</span>(<span class="str">&quot;unknown frame status&quot;</span>)
+<a class="ln" id="L144" href="#L144">144</a>    }
+<a class="ln" id="L145" href="#L145">145</a>  }
+<a class="ln" id="L146" href="#L146">146</a>  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">submit</span>(<span class="var">d</span>: &amp;<span class="kw">mut</span> <a href="#L1"><span class="ty">Device</span></a>, <span class="var">p</span>: <a href="#L10"><span class="ty">Pass</span></a>): <span class="ty">Result</span>((), <span class="ty">Text</span>) {
+<a class="ln" id="L147" href="#L147">147</a>    <span class="kw">match</span> <span class="fn">submit_frame</span>(&amp;<span class="kw">mut</span> d, p) {
+<a class="ln" id="L148" href="#L148">148</a>      <span class="ty">Err</span>(e) =&gt; <span class="ty">Err</span>(e)
+<a class="ln" id="L149" href="#L149">149</a>      <span class="ty">Ok</span>(<span class="ty">Submitted</span>) =&gt; <span class="ty">Ok</span>(#())
+<a class="ln" id="L150" href="#L150">150</a>      <span class="ty">Ok</span>(<span class="ty">Outdated</span>) =&gt; <span class="ty">Err</span>(<span class="str">&quot;surface needs reconfiguration&quot;</span>)
+<a class="ln" id="L151" href="#L151">151</a>      <span class="ty">Ok</span>(<span class="ty">Lost</span>) =&gt; <span class="ty">Err</span>(<span class="str">&quot;surface lost&quot;</span>)
+<a class="ln" id="L152" href="#L152">152</a>      <span class="ty">Ok</span>(<span class="ty">TimedOut</span>) =&gt; <span class="ty">Err</span>(<span class="str">&quot;surface acquisition timed out&quot;</span>)
+<a class="ln" id="L153" href="#L153">153</a>    }
+<a class="ln" id="L154" href="#L154">154</a>  }
+<a class="ln" id="L155" href="#L155">155</a>}
+</code></pre>
+</html>
