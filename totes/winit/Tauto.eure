@@ -1,0 +1,18 @@
+package {
+  name = "winit"
+  version = "0.1.0"
+}
+dependencies {
+  wgpu { path = "../wgpu" }
+}
+// Trust wgpu's extern functions (GPU access through its Rust bridge).
+trust {
+  extern = ["wgpu"]
+}
+rust {
+  bridge = "bridge"
+  types {
+    WinitWindow = "winit_bridge::WinitWindow"
+    WinitMessage = "winit_bridge::WinitMessage"
+  }
+}

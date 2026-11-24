@@ -1,0 +1,11 @@
+package {
+  name = "winit-example"
+  version = "0.1.0"
+}
+dependencies {
+  winit { path = ".." }
+  wgpu { path = "../../wgpu" }
+}
+trust {
+  extern = ["winit", "wgpu"]
+}

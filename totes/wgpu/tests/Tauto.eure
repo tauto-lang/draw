@@ -1,0 +1,10 @@
+package {
+  name = "wgpu-tests"
+  version = "0.1.0"
+}
+dependencies {
+  wgpu { path = ".." }
+}
+trust {
+  extern = ["wgpu"]
+}

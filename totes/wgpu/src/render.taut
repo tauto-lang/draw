@@ -1,0 +1,155 @@
+pub struct(affine) Device {}
+pub struct Buffer { id: u64 }
+pub struct Texture { id: u64 }
+pub struct Target { id: u64 }
+pub struct Pipeline { id: u64 }
+pub(open) enum BufferKind { Storage, Uniform }
+pub(open) enum FrameStatus { Submitted, Outdated, Lost, TimedOut }
+pub(open) enum Blend { Replace, SourceOver }
+pub(open) enum Binding { BindBuffer(Buffer), BindTexture(Texture) }
+pub(open) struct Pass {
+  target: Target,
+  pipeline: Pipeline,
+  bindings: List(Binding),
+  clear_rgba: Option(u32),
+  vertices: u32,
+  instances: u32
+}
+
+extern {
+  fn open(): Result(Device, Text)
+  fn make_buffer(d: &mut Device, bytes: u64, uniform: Bool): Result(u64, Text)
+  fn upload_buffer(d: &mut Device, id: u64, offset: u64, data: &Vec(u8)): Result((), Text)
+  fn make_texture(d: &mut Device, width: u32, height: u32, mask: Bool): Result(u64, Text)
+  fn upload_texture(
+    d: &mut Device,
+    id: u64,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    data: &Vec(u8)
+  ): Result((), Text)
+  fn make_pipeline(d: &mut Device, target: u64, source: &Text, blend: Bool): Result(u64, Text)
+  fn draw(
+    d: &mut Device,
+    target: u64,
+    pipe: u64,
+    ids: &Vec(u64),
+    clear: Option(u32),
+    vertices: u32,
+    instances: u32
+  ): Result(u32, Text)
+  fn read_rgba(d: &mut Device, id: u64, out: &mut Vec(u8)): Result((), Text)
+  fn window_target(d: &mut Device): Result(u64, Text)
+  fn resize(d: &mut Device, id: u64, width: u32, height: u32): Result((), Text)
+  fn release(d: &mut Device, id: u64): Result((), Text)
+}
+
+pub module Device {
+  pub fn headless(): Result(Device, Text) { open() }
+}
+
+pub module Buffer {
+  pub fn create(d: &mut Device, bytes: u64, kind: BufferKind): Result(Buffer, Text) {
+    match make_buffer(&mut d, bytes, match kind { Storage => false, Uniform => true }) {
+      Ok(id) => Ok(Buffer { id: id })
+      Err(e) => Err(e)
+    }
+  }
+  pub fn write(d: &mut Device, b: Buffer, offset: u64, data: &Vec(u8)): Result((), Text) {
+    upload_buffer(&mut d, b.id, offset, &data)
+  }
+  pub fn close(d: &mut Device, b: Buffer): Result((), Text) { release(&mut d, b.id) }
+}
+
+pub module Texture {
+  pub fn mask(d: &mut Device, width: u32, height: u32): Result(Texture, Text) {
+    match make_texture(&mut d, width, height, true) {
+      Ok(id) => Ok(Texture { id: id })
+      Err(e) => Err(e)
+    }
+  }
+  pub fn write(
+    d: &mut Device,
+    t: Texture,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    data: &Vec(u8)
+  ): Result((), Text) {
+    upload_texture(&mut d, t.id, x, y, width, height, &data)
+  }
+  pub fn close(d: &mut Device, t: Texture): Result((), Text) { release(&mut d, t.id) }
+}
+
+pub module Target {
+  pub fn window(d: &mut Device): Result(Target, Text) {
+    match window_target(&mut d) { Ok(id) => Ok(Target { id: id }), Err(e) => Err(e) }
+  }
+  pub fn resize_window(d: &mut Device, t: Target, width: u32, height: u32): Result((), Text) {
+    resize(&mut d, t.id, width, height)
+  }
+  pub fn rgba8(d: &mut Device, width: u32, height: u32): Result(Target, Text) {
+    match make_texture(&mut d, width, height, false) {
+      Ok(id) => Ok(Target { id: id })
+      Err(e) => Err(e)
+    }
+  }
+  pub fn texture(t: Target): Texture { Texture { id: t.id } }
+  pub fn read(d: &mut Device, t: Target): Result(Vec(u8), Text) {
+    var pixels: Vec(u8) := Vec::new()
+    match read_rgba(&mut d, t.id, &mut pixels) { Ok(_) => Ok(pixels), Err(e) => Err(e) }
+  }
+  pub fn close(d: &mut Device, t: Target): Result((), Text) { release(&mut d, t.id) }
+}
+
+pub module Pipeline {
+  pub fn create(d: &mut Device, target: Target, wgsl: Text, blend: Blend): Result(Pipeline, Text) {
+    match make_pipeline(
+      &mut d,
+      target.id,
+      &wgsl,
+      match blend { Replace => false, SourceOver => true }
+    ) {
+      Ok(id) => Ok(Pipeline { id: id })
+      Err(e) => Err(e)
+    }
+  }
+  pub fn close(d: &mut Device, p: Pipeline): Result((), Text) { release(&mut d, p.id) }
+}
+
+fn collect_bindings(xs: List(Binding), ids: &mut Vec(u64)): Unit {
+  match xs {
+    Nil => #()
+    Cons(x, tail) => {
+      Vec::push(&mut ids, match x { BindBuffer(b) => b.id, BindTexture(t) => t.id })
+      collect_bindings(tail, &mut ids)
+    }
+  }
+}
+
+pub module Pass {
+  pub fn submit_frame(d: &mut Device, p: Pass): Result(FrameStatus, Text) {
+    var ids: Vec(u64) := Vec::new()
+    collect_bindings(p.bindings, &mut ids)
+    match draw(&mut d, p.target.id, p.pipeline.id, &ids, p.clear_rgba, p.vertices, p.instances) {
+      Err(e) => Err(e)
+      Ok(0) => Ok(Submitted)
+      Ok(1) => Ok(Outdated)
+      Ok(2) => Ok(Lost)
+      Ok(3) => Ok(TimedOut)
+      Ok(_) => Err("unknown frame status")
+    }
+  }
+  pub fn submit(d: &mut Device, p: Pass): Result((), Text) {
+    match submit_frame(&mut d, p) {
+      Err(e) => Err(e)
+      Ok(Submitted) => Ok(#())
+      Ok(Outdated) => Err("surface needs reconfiguration")
+      Ok(Lost) => Err("surface lost")
+      Ok(TimedOut) => Err("surface acquisition timed out")
+    }
+  }
+}

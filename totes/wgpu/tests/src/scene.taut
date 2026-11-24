@@ -1,0 +1,82 @@
+import wgpu::render { Binding, Blend, Buffer, BufferKind, Device, Pass, Pipeline, Target, Texture }
+
+// Two rectangles. Coordinates are pixels.
+fn shader(): Text {
+  "@group(0) @binding(0) var<storage, read> sizes: array<vec2u>;
+@group(0) @binding(1) var mask: texture_2d<u32>;
+struct Vertex { @builtin(position) p: vec4f, @location(0) @interpolate(flat) color: vec4f }
+@vertex fn vs_main(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Vertex {
+  let corners = array<vec2f, 6>(vec2f(0,0), vec2f(1,0), vec2f(0,1), vec2f(0,1), vec2f(1,0), vec2f(1,1));
+  let size = vec2f(sizes[i]);
+  let pixel = corners[v] * size;
+  return Vertex(vec4f(pixel * vec2f(0.25,-0.5) + vec2f(-1,1), 0, 1),
+                select(vec4f(1,0,0,1), vec4f(0,0,1,128.0/255.0), i == 1u));
+}
+@fragment fn fs_main(input: Vertex) -> @location(0) vec4f { let m = textureLoad(mask, vec2i(input.p.xy), 0).r; return vec4f(input.color.rgb, input.color.a * f32(m)/255.0); }"
+}
+
+fn render_bound(d: &mut Device, sizes: Buffer, mask: Texture): Result(Vec(u8), Text) {
+  match Target::rgba8(&mut d, 8, 4) {
+    Err(e) => Err(e)
+    Ok(target) => match Pipeline::create(&mut d, target, shader(), SourceOver) {
+      Err(e) => Err(e)
+      Ok(pipeline) => match Pass::submit(&mut d, Pass {
+        target: target, pipeline: pipeline, bindings: [BindBuffer(sizes), BindTexture(mask)],
+        clear_rgba: Some(4294967295), vertices: 6, instances: 0
+      }) {
+        Err(e) => Err(e)
+        Ok(_) => match Pass::submit(&mut d, Pass {
+          target: target, pipeline: pipeline, bindings: [BindBuffer(sizes), BindTexture(mask)],
+          clear_rgba: None, vertices: 6, instances: 2
+        }) {
+          Err(e) => Err(e)
+          Ok(_) => Target::read(&mut d, target)
+        }
+      }
+    }
+  }
+}
+
+fn render_masked(d: &mut Device, sizes: Buffer): Result(Vec(u8), Text) ! {div} {
+  match Texture::mask(&mut d, 8, 4) {
+    Err(e) => Err(e)
+    Ok(mask) => {
+      var bytes: Vec(u8) := Vec::new()
+      while Vec::len(&bytes) < 32 { Vec::push(&mut bytes, 255) }
+      match Texture::write(&mut d, mask, 0, 0, 8, 4, &bytes) {
+        Err(e) => Err(e)
+        Ok(_) => render_bound(&mut d, sizes, mask)
+      }
+    }
+  }
+}
+
+fn push_size(bytes: &mut Vec(u8), n: u8): Unit {
+  Vec::push(&mut bytes, n)
+  Vec::push(&mut bytes, 0)
+  Vec::push(&mut bytes, 0)
+  Vec::push(&mut bytes, 0)
+}
+
+pub fn render_scene(): Result(Vec(u8), Text) ! {div} {
+  match Device::headless() {
+    Err(e) => Err(e)
+    Ok(device) => {
+      var d := device
+      match Buffer::create(&mut d, 16, Storage) {
+        Err(e) => Err(e)
+        Ok(sizes) => {
+          var bytes: Vec(u8) := Vec::new()
+          push_size(&mut bytes, 4)
+          push_size(&mut bytes, 4)
+          push_size(&mut bytes, 8)
+          push_size(&mut bytes, 2)
+          match Buffer::write(&mut d, sizes, 0, &bytes) {
+            Err(e) => Err(e)
+            Ok(_) => render_masked(&mut d, sizes)
+          }
+        }
+      }
+    }
+  }
+}

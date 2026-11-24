@@ -1,0 +1,35 @@
+import std::builtin::os { exit, stderr, stdout }
+import "scene.taut" { render_scene }
+
+fn byte_at(px: &Vec(u8), i: u64, value: u8): Bool {
+  match Vec::get(&px, i) { Some(b) => b == value, None => false }
+}
+
+fn check_pixels(px: &Vec(u8)): Bool ! {overflow, div} {
+  var good := Vec::len(&px) == 128
+  var y: u64 := 0
+  while y < 4 {
+    var x: u64 := 0
+    while x < 8 {
+      let i := (8 * y + x) * 4
+      let red: u8 := if y < 2 { 127 } else { 255 }
+      let green: u8 := if x < 4 { 0 } else { red }
+      let blue: u8 := if x >= 4 { 255 } else if y < 2 { 128 } else { 0 }
+      good := good && byte_at(
+        &px,
+        i,
+        red
+      ) && byte_at(&px, i + 1, green) && byte_at(&px, i + 2, blue) && byte_at(&px, i + 3, 255)
+      x := x + 1
+    }
+    y := y + 1
+  }
+  good
+}
+
+perform main(() => match render_scene() {
+  Err(e) => { perform stderr(concat(e, "\n")); perform exit(1) }
+  Ok(px) => if check_pixels(&px) { perform stdout("32 RGBA pixels match\n") } else {
+    perform stderr("RGBA pixel mismatch\n"); perform exit(1)
+  }
+})

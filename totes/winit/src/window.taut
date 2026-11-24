@@ -1,0 +1,80 @@
+import wgpu::render { Device }
+
+pub struct(affine) WinitWindow {}
+struct(affine) WinitMessage {}
+pub(open) enum LogicalKey { Character(Text), Named(Text), Dead(Text), UnknownKey }
+pub(open) enum Event {
+  Idle, CloseRequested, Resized(u32, u32), ScaleChanged(u32), RedrawRequested,
+  FocusChanged(Bool), Key(
+    Text,
+    LogicalKey,
+    Bool,
+    Bool
+  ), PointerMoved(i64, i64), PointerButton(Text, Bool), PointerLeft,
+  WheelLines(i64, i64), WheelPixels(i64, i64)
+}
+extern {
+  fn win_open(title: &Text, width: u32, height: u32): Result(WinitWindow, Text)
+  fn win_open_fullscreen(title: &Text): Result(WinitWindow, Text)
+  fn win_set_fullscreen(w: &mut WinitWindow, on: Bool): Result((), Text)
+  fn win_device(w: &mut WinitWindow): Result(Device, Text)
+  fn win_pull(w: &mut WinitWindow, timeout_ms: u32): Result(WinitMessage, Text)
+  fn win_redraw(w: &mut WinitWindow): Result((), Text)
+  fn win_size(w: &mut WinitWindow): Result(u32 × u32, Text)
+  fn win_scale(w: &mut WinitWindow): Result(u32, Text)
+  fn win_close(w: WinitWindow): Result((), Text)
+  fn msg_kind(m: &WinitMessage): u32
+  fn msg_pair(m: &WinitMessage): u32 × u32
+  fn msg_position(m: &WinitMessage): i64 × i64
+  fn msg_name(m: &WinitMessage): Text
+  fn msg_logical_kind(m: &WinitMessage): u32
+  fn msg_logical_text(m: &WinitMessage): Text
+  fn msg_flag(m: &WinitMessage): Bool
+  fn msg_repeat(m: &WinitMessage): Bool
+}
+fn logical(m: &WinitMessage): LogicalKey {
+  match msg_logical_kind(&m) {
+    1 => Character(msg_logical_text(&m))
+    2 => Named(msg_logical_text(&m))
+    3 => Dead(msg_logical_text(&m))
+    other => UnknownKey
+  }
+}
+pub module WinitWindow {
+  pub fn open(
+    title: Text,
+    width: u32,
+    height: u32
+  ): Result(WinitWindow, Text) { win_open(&title, width, height) }
+  // Borderless fullscreen on the current monitor; the size comes as `Resized`.
+  pub fn open_fullscreen(title: Text): Result(WinitWindow, Text) { win_open_fullscreen(&title) }
+  pub fn set_fullscreen(
+    w: &mut WinitWindow,
+    on: Bool
+  ): Result((), Text) { win_set_fullscreen(&mut w, on) }
+  pub fn take_device(w: &mut WinitWindow): Result(Device, Text) { win_device(&mut w) }
+  pub fn request_redraw(w: &mut WinitWindow): Result((), Text) { win_redraw(&mut w) }
+  pub fn size(w: &mut WinitWindow): Result(u32 × u32, Text) { win_size(&mut w) }
+  pub fn scale(w: &mut WinitWindow): Result(u32, Text) { win_scale(&mut w) }
+  pub fn close(w: WinitWindow): Result((), Text) { win_close(w) }
+  pub fn pull(w: &mut WinitWindow, timeout_ms: u32): Result(Event, Text) {
+    match win_pull(&mut w, timeout_ms) {
+      Err(e) => Err(e)
+      Ok(m) => match msg_kind(&m) {
+        0 => Ok(Idle)
+        1 => Ok(CloseRequested)
+        2 => { let #(width, height) := msg_pair(&m); Ok(Resized(width, height)) }
+        3 => { Ok(ScaleChanged(msg_pair(&m).fst)) }
+        4 => Ok(RedrawRequested)
+        5 => Ok(FocusChanged(msg_flag(&m)))
+        6 => Ok(Key(msg_name(&m), logical(&m), msg_flag(&m), msg_repeat(&m)))
+        7 => { let #(x, y) := msg_position(&m); Ok(PointerMoved(x, y)) }
+        8 => Ok(PointerButton(msg_name(&m), msg_flag(&m)))
+        9 => Ok(PointerLeft)
+        10 => { let #(x, y) := msg_position(&m); Ok(WheelLines(x, y)) }
+        11 => { let #(x, y) := msg_position(&m); Ok(WheelPixels(x, y)) }
+        other => Err("unknown window event")
+      }
+    }
+  }
+}

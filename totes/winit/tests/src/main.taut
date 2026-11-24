@@ -1,0 +1,98 @@
+import std::builtin::os { exit, stderr, stdout }
+import winit::window { Event, WinitWindow }
+import wgpu::render { Blend, Device, FrameStatus, Pass, Pipeline, Target }
+
+fn shader(): Text {
+  "@vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+    let p = array<vec2f,6>(vec2f(-0.55,-0.45),vec2f(0.55,-0.45),vec2f(-0.55,0.45),vec2f(-0.55,0.45),vec2f(0.55,-0.45),vec2f(0.55,0.45));
+    return vec4f(p[i],0,1);
+  }
+  @fragment fn fs_main() -> @location(0) vec4f { return vec4f(1,0.65,0.18,1); }"
+}
+
+fn frames(
+  w: &mut WinitWindow,
+  d: &mut Device,
+  t: Target,
+  p: Pipeline
+): Result((), Text) ! {div, overflow} {
+  var polls: u32 := 0
+  var displayed := false
+  var closed := false
+  var failure := ""
+  while polls < 150 && closed == false && failure == "" {
+    match WinitWindow::pull(&mut w, 20) {
+      Err(e) => { failure := e }
+      Ok(event) => match event {
+        CloseRequested => { closed := true }
+        Resized(x, y) => if x > 0 && y > 0 {
+          match Target::resize_window(&mut d, t, x, y) {
+            Err(e) => { failure := e }
+            Ok(_) => match WinitWindow::request_redraw(&mut w) {
+              Err(e) => { failure := e },
+              Ok(_) => ()
+            }
+          }
+        } else { () }
+        RedrawRequested => match Pass::submit_frame(
+          &mut d,
+          Pass {
+            target:t,
+            pipeline:p,
+            bindings:Nil,
+            clear_rgba: Some(337454079),
+            vertices:6,
+            instances:1
+          }
+        ) {
+          Ok(Submitted) => { displayed := true }
+          Ok(TimedOut) => match WinitWindow::request_redraw(&mut w) {
+            Err(e) => { failure := e },
+            Ok(_) => ()
+          }
+          Ok(_) => { failure := "surface needs reconfiguration" }
+          Err(e) => { failure := e }
+        }
+        Idle => ()
+        ScaleChanged(_) => ()
+        FocusChanged(_) => ()
+        Key(_, _, _, _) => ()
+        PointerMoved(_, _) => ()
+        PointerButton(_, _) => ()
+        PointerLeft => ()
+        WheelLines(_, _) => ()
+        WheelPixels(_, _) => ()
+      }
+    }
+    polls := polls + 1
+  }
+  if failure != "" { Err(failure) } else if displayed { Ok(#()) } else { Err("no frame presented") }
+}
+
+fn picture(w: &mut WinitWindow): Result((), Text) ! {div, overflow} {
+  match WinitWindow::take_device(&mut w) {
+    Err(e) => Err(e)
+    Ok(device) => {
+      var d := device
+      match Target::window(&mut d) {
+        Err(e) => Err(e)
+        Ok(t) => match Pipeline::create(&mut d, t, shader(), Replace) {
+          Err(e) => Err(e)
+          Ok(p) => match WinitWindow::request_redraw(&mut w) {
+            Err(e) => Err(e)
+            Ok(_) => frames(&mut w, &mut d, t, p)
+          }
+        }
+      }
+    }
+  }
+}
+perform main(() => match WinitWindow::open("Tauto winit",640,400) {
+  Err(e) => { perform stderr(concat(e,"\n")); perform exit(1) }
+  Ok(window) => {
+    var w := window
+    let result := picture(&mut w)
+    match WinitWindow::close(w) { Err(e) => { perform stderr(e); perform exit(1) }, Ok(_) => () }
+    match result { Err(e) => { perform stderr(concat(e,"\n")); perform exit(1) }, Ok(_) => perform stdout("rectangle presented\n") }
+  }
+})
